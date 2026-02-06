@@ -1,0 +1,31 @@
+[project]
+name = "stt-tts-agent-tools"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Oktavianus Handika",email = "oktavianus.handika@gdplabs.id"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "glaip-sdk[local] (>=0.7.29,<0.8.0)",
+    "pydantic>=2.0.0",
+    "python-dotenv>=1.0.0",
+    "langchain-core>=0.3.0",
+    "glaip-sdk>=0.7.19",
+    "gllm-core-binary>=0.3.0",
+    "gllm-plugin-binary>=0.0.7",
+    "gllm-tools-binary>=0.1.3",
+    "bosa-core-binary (>=0.9.7,<0.10.0)",
+    "gl-speech-sdk (>=0.0.1b3,<0.0.2)",
+]
+
+[tool.poetry]
+packages = [{include = "gl_sdk_aip_agent_local", from = "src"}]
+
+[tool.poetry.dependencies]
+python = ">=3.12,<3.13"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
