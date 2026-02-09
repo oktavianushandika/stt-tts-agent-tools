@@ -8,6 +8,7 @@ Authors:
 
 from typing import Any, Optional
 
+from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 from gl_speech_sdk import SpeechClient
@@ -35,23 +36,8 @@ class TTSTool(BaseTool):
     description: str = "Converts text to speech."
     args_schema: type[BaseModel] = TTSInput
     tool_config_schema: type[BaseModel] = TTSConfig
-    tool_config: TTSConfig = Field(default_factory=TTSConfig)
 
-    def __init__(self, config: Optional[TTSConfig] = None, **kwargs: Any):
-        super().__init__(**kwargs)
-        if config:
-            self.tool_config = config
-        else:
-            # Provide fallbacks to prevent NoneType errors during server-side validation
-            self.tool_config = TTSConfig(
-                tts_base_url=os.getenv("TTS_BASE_URL", ""),
-                tts_api_key=os.getenv("TTS_API_KEY", ""),
-                model=os.getenv("TTS_MODEL", "tts-dimas-formal"),
-                # Convert string env var to actual boolean
-                wait=str(os.getenv("TTS_WAIT", "True")).lower() == "true",
-            )
-
-    def _run(self, text: str, **kwargs: Any) -> str:
+    def _run(self, text: str, config: RunnableConfig = None, **kwargs: Any) -> str:
         """Convert speech to text.
 
         Args:
@@ -63,15 +49,20 @@ class TTSTool(BaseTool):
         """
 
         try:
-            tts_client = SpeechClient(api_key=self.tool_config.tts_api_key,
-                base_url=self.tool_config.tts_base_url
-            )
-            response_result = tts_client.tts.synthesize(
-                text=text,
-                model=self.tool_config.model,
-                wait=self.tool_config.wait
-            )
-            return response_result.result
+            tool_config = self.get_tool_config(config)
+            if (tool_config.tts_base_url == "" or tool_config.tts_api_key == ""):
+                return "Error: TTS base URL or API key is not set"
+            else:
+                tts_client = SpeechClient(api_key=tool_config.tts_api_key,
+                    base_url=tool_config.tts_base_url
+                )
+                response_result = tts_client.tts.synthesize(
+                    text=text,
+                    model=tool_config.model,
+                    wait=tool_config.wait,
+                    as_signed_url=True
+                )
+                return response_result.result
         except Exception as e:
             return f"Error processing audio: {str(e)}"
 
