@@ -27,42 +27,54 @@ class TTSInput(BaseModel):
     """Input schema for the TTS tool."""
 
     text: str = Field(description="The text to convert to speech")
+    model: Optional[str] = Field(
+        default=None,
+        description="The TTS model to use. Options: 'tts-dimas-formal' (male voice) or 'tts-ocha-gentle' (female voice). If not specified, uses the default model from config."
+    )
 
 
 class TTSTool(BaseTool):
     """Tool for converting text to speech."""
 
     name: str = "tts-test"
-    description: str = "Converts text to speech."
+    description: str = """Converts text to speech. 
+    Supports both male voice (tts-dimas-formal) and female voice (tts-ocha-gentle).
+    You can specify the model parameter to choose the voice type."""
     args_schema: type[BaseModel] = TTSInput
     tool_config_schema: type[BaseModel] = TTSConfig
 
     def _run(self, text: str, config: RunnableConfig = None, **kwargs: Any) -> str:
-        """Convert speech to text.
+        """Convert text to speech.
 
         Args:
-            audio_file: The audio file to convert to text.
+            text: The text to convert to speech.
+            model: Optional model to use. If not specified, uses config default.
+            config: Runtime configuration.
             **kwargs: Additional execution arguments.
 
         Returns:
-            Text string.
+            S3 URL to the generated audio file.
         """
 
         try:
             tool_config = self.get_tool_config(config)
             if (tool_config.tts_base_url == "" or tool_config.tts_api_key == ""):
                 return "Error: TTS base URL or API key is not set"
-            else:
-                tts_client = SpeechClient(api_key=tool_config.tts_api_key,
-                    base_url=tool_config.tts_base_url
-                )
-                response_result = tts_client.tts.synthesize(
-                    text=text,
-                    model=tool_config.model,
-                    wait=tool_config.wait,
-                    as_signed_url=True
-                )
-                return response_result.result
+            
+            # Use the model parameter if provided, otherwise use config default
+            selected_model = kwargs.get("model") if kwargs.get("model") is not None else tool_config.model
+            
+            tts_client = SpeechClient(
+                api_key=tool_config.tts_api_key,
+                base_url=tool_config.tts_base_url
+            )
+            response_result = tts_client.tts.synthesize(
+                text=text,
+                model=selected_model,
+                wait=tool_config.wait,
+                as_signed_url=True
+            )
+            return response_result.result
         except Exception as e:
             return f"Error processing audio: {str(e)}"
 

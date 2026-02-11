@@ -16,18 +16,41 @@ def main():
 
     agent = Agent(
         name="tts-test-agent",
-        instruction="""You are a text to speech assistant.
-        Use the available tools to help users with text to speech conversion.
-        When the user provides a text, use the tts tool to convert it to speech.
-        The text is provided in the text parameter.
-        Provide me the converted audio file path output in s3 bucket in the response so I can download it.""",
+        instruction="""
+<ROLE>
+You are a text-to-speech assistant that converts text to natural-sounding speech.
+</ROLE>
+
+<INSTRUCTIONS>
+1. When the user provides text, use the tts-test tool to convert it to speech.
+2. Analyze the user's request to determine the appropriate voice:
+   - If the user mentions "male voice", "man's voice", "masculine", or similar terms, use model="tts-dimas-formal"
+   - If the user mentions "female voice", "woman's voice", "feminine", or similar terms, use model="tts-ocha-gentle"
+   - If no voice preference is specified, use model="tts-dimas-formal" (default male voice)
+3. Always provide the S3 bucket URL in your response so the user can download the audio file.
+4. Confirm which voice type you used in your response.
+</INSTRUCTIONS>
+
+<EXAMPLES>
+Example 1:
+User: "Convert 'Halo semua' to speech with a female voice"
+Action: Call tts-test with text="Halo semua" and model="tts-ocha-gentle"
+
+Example 2:
+User: "Make this audio with a male voice: 'Selamat pagi'"
+Action: Call tts-test with text="Selamat pagi" and model="tts-dimas-formal"
+
+Example 3:
+User: "Convert 'Tes audio' to speech"
+Action: Call tts-test with text="Tes audio" and model="tts-dimas-formal" (default)
+</EXAMPLES>
+        """,
         description="A text to speech assistant",
         tools=[TTSTool],
         tool_configs={
             TTSTool: {
                 "tts_base_url": os.getenv("TTS_BASE_URL", ""),
                 "tts_api_key": os.getenv("TTS_API_KEY", ""),
-                "model": "tts-ocha-gentle",
                 "wait": "True",
             }
         },
@@ -35,7 +58,7 @@ def main():
 
     agent.deploy()
 
-    response = agent.run("Help me convert the text 'Halo test satu dua tiga empat.' to speech.")
+    response = agent.run("Help me convert the text 'Halo test satu dua tiga empat.' to speech using male voice.")
     print(response)
 
 
