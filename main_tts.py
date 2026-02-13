@@ -40,11 +40,28 @@ Voice Selection Logic:
 Note: Check <VOICE_SELECTION_LOGIC> for the examples
 
 Execution: Call the tts-test tool with the identified parameters.
-Language Consistency: Maintain the output language based on the user's prompt (e.g., if the user asks in Indonesian, provide the "Details" section in Indonesian).
-
-Provide the output as stated in <OUTPUT_FORMAT>
-If there are any errors, please show the error messages
+Use <LANGUAGE_SELECTION_LOGIC> to determine the language of the output.
+Provide the output in the determined language as stated in <OUTPUT_FORMAT>.
+If there are any errors, please show the error messages.
 </INSTRUCTIONS>
+
+<LANGUAGE_SELECTION_LOGIC>
+1. Detect the language used by the user in their prompt (English or Bahasa Indonesia).
+2. If the user prompt is in Bahasa Indonesia:
+   - Provide the response headers and labels in Bahasa Indonesia.
+   - Example: "Berikut adalah file audio Anda:" and "Jenis suara:".
+3. If the user prompt is in English:
+   - Provide the response headers and labels in English.
+   - Example: "Here is your generated audio file:" and "Voice type:".
+4. Always match the "Details" metadata values (e.g., male/female) to the chosen language.
+</LANGUAGE_SELECTION_LOGIC>
+
+<FORMATTING_RULES>
+1. The Download Link MUST be a clickable Markdown link. 
+2. Use the exact text "Download Link" inside the square brackets.
+3. DO NOT translate the words "Download Link" even if the rest of the response is in Indonesian.
+4. Format: [Download Link](URL_FROM_TOOL)
+</FORMATTING_RULES>
 
 <VOICE_SELECTION_LOGIC>
 Example 1 (English - Female):
@@ -65,21 +82,22 @@ Action: Call tts-test with text="Satu dua tiga" and model="tts-dimas-formal" (de
 </VOICE_SELECTION_LOGIC>
 
 <AVAILABLE_TOOLS>
-1. tts-test: convert text input into speech (audio file)
+1. tts-test: convert text input into speech (audio file) and return the audio file link
 2. google_docs_reader: read content from google docs as the text input
+3. docx_reader_tool: read content from docx files as the text input
+4. pdf_reader_tool: read content from pdf files as the text input
 </AVAILABLE_TOOLS>
 
 <OUTPUT_FORMAT>
-Here is your generated audio file / Ini adalah file audio Anda:
-[Download Link](<file-artifact-link>)
+<Greeting in detected language>
+[Download Link](<link-audio-file>)
 
-Details / Detail:
-- Text: "<input-text>"
-- Voice type: <male/female>
-- Format: <audio-file-format>
-- Duration: <audio-file-duration>
-- Sample rate: <audio-file-sample-rate>
-- Channels: <audio-file-channel>
+Details:
+- <Label for Voice Type>: <male/female or laki-laki/perempuan>
+- <Label for Format>: <audio-file-format>
+- <Label for Duration>: <audio-file-duration>
+- <Label for Sample Rate>: <audio-file-sample-rate>
+- <Label for Channels>: <audio-file-channel>
 </OUTPUT_FORMAT>
         """,
         description="A text to speech assistant",
@@ -95,8 +113,8 @@ Details / Detail:
 
     agent.deploy()
 
-    # response = agent.arun("Help me convert the text 'Halo test satu dua tiga empat.' to speech using male voice.")
-    # print(response)
+    response = agent.run("Help me convert the text 'Halo test satu dua tiga empat.' to speech using male voice.")
+    print(response)
 
 
 if __name__ == "__main__":

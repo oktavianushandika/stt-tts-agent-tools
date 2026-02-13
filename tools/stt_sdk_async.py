@@ -59,38 +59,31 @@ class STTTool(BaseTool):
                 result = stt_client.stt.transcribe(
                     model=tool_config.model,
                     wait=False,
-                    uri=uri
+                    uri=uri,
+                    include_filler=True,
+                    include_partial_results=True,
+                    auto_punctuation=True
                 )
                 job_id = result.job_id
 
-                # Get result when complete
-                # 1. Polling loop to wait for completion
                 while True:
                     status = stt_client.stt.get_job(job_id)
 
-                    # Check if the job is finished or failed
                     if status.status.lower() == "complete" or status.status.lower() == "failed":
                         break;
                     time.sleep(5)
 
-                # 2. Get result only after the loop breaks
-                # Get result when complete
                 job_response = stt_client.stt.get_job(job_id)
 
-                # 1. Access the data list inside the STTResult object
-                # Structure: job_response.result.data
                 if hasattr(job_response, 'result') and hasattr(job_response.result, 'data'):
                     all_segments = job_response.result.data
                     
-                    # 2. Extract transcript from Channel 0 only (to avoid duplicates)
-                    # We use segment.transcript because these are TranscriptionResult objects
                     clean_transcripts = [
                         segment.transcript 
                         for segment in all_segments 
                         if segment.channel == 0
                     ]
                     
-                    # 3. Join into a single paragraph
                     full_transcript = " ".join(clean_transcripts)
                     
                     return full_transcript
