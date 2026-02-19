@@ -5,7 +5,7 @@ Authors:
 """
 import os
 from glaip_sdk import Agent
-from tools.stt_sdk_async import STTTool
+from tools.stt import STTTool
 from dotenv import load_dotenv
 
 load_dotenv(override=True)

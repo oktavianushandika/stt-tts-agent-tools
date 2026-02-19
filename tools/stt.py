@@ -6,14 +6,14 @@ Authors:
     GDP Labs
 """
 
-from typing import Any, Optional, Type
+from typing import Any
 
 from langchain_core.tools import BaseTool
+from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel, Field
+from gl_speech_sdk import SpeechClient
 
-import os
-import base64
-import requests
+import time
 
 class STTConfig(BaseModel):
     """Config schema for the STT tool."""
@@ -26,40 +26,22 @@ class STTConfig(BaseModel):
 class STTInput(BaseModel):
     """Input schema for the STT tool."""
 
-    audio_file: bytes = Field(description="The audio file to convert to text")
+    uri: str = Field(description="The URI of the audio file")
+
 
 class STTTool(BaseTool):
     """Tool for converting speech to text."""
 
     name: str = "stt-test"
     description: str = "Converts speech to text."
-    args_schema: Type[BaseModel] = STTInput
-    tool_config_schema: Type[BaseModel] = STTConfig
-    tool_config: STTConfig = Field(default_factory=STTConfig)
+    args_schema: type[BaseModel] = STTInput
+    tool_config_schema: type[BaseModel] = STTConfig
 
-    def __init__(self, config: Optional[STTConfig] = None, **kwargs: Any):
-        super().__init__(**kwargs)
-        if config:
-            self.tool_config = config
-        else:
-            # Provide fallbacks to prevent NoneType errors during server-side validation
-            self.tool_config = STTConfig(
-                stt_base_url=os.getenv("STT_BASE_URL", ""),
-                stt_api_key=os.getenv("STT_API_KEY", ""),
-                model=os.getenv("STT_MODEL", "stt-general"),
-                # Convert string env var to actual boolean
-                wait=str(os.getenv("STT_WAIT", "True")).lower() == "true",
-            )
-
-    def convert_to_base64(self, audio_file: bytes) -> str:
-        """Convert audio to base64 format."""
-        return base64.b64encode(audio_file).decode("utf-8")
-
-    def _run(self, audio_file: bytes, **kwargs: Any) -> str:
+    def _run(self, uri: str, config: RunnableConfig = None, **kwargs: Any) -> str:
         """Convert speech to text.
 
         Args:
-            audio_file: The audio file to convert to text.
+            uri: The URI of the audio file.
             **kwargs: Additional execution arguments.
 
         Returns:
@@ -67,36 +49,46 @@ class STTTool(BaseTool):
         """
 
         try:
-            base64_audio = self.convert_to_base64(audio_file)
+            tool_config = self.get_tool_config(config)
+            if (tool_config.stt_base_url == "" or tool_config.stt_api_key == ""):
+                return "Error: STT base URL or API key is not set"
+            else:
+                stt_client = SpeechClient(api_key=tool_config.stt_api_key,
+                    base_url=tool_config.stt_base_url
+                )
+                result = stt_client.stt.transcribe(
+                    model=tool_config.model,
+                    wait=False,
+                    uri=uri,
+                    include_filler=True,
+                    include_partial_results=True,
+                    auto_punctuation=True
+                )
+                job_id = result.job_id
 
-            payload = {
-                "config": {
-                    "engine": self.tool_config.model or "stt-general", 
-                    "wait": str(self.tool_config.wait).lower() == "true",
-                    "speaker_count": 1,
-                    "include_filler": "false",
-                    "include_partial_results": "false",
-                    "auto_punctuation": "false",
-                    "enable_spoken_numerals": "false",
-                    "enable_speech_insights": "false",
-                    "enable_voice_insights": "false"
-                },
-                "request": {
-                    "label": "stt-test-job",
-                    "data": base64_audio
-                }
-            }
+                while True:
+                    status = stt_client.stt.get_job(job_id)
 
-            response = requests.post(
-                self.tool_config.stt_base_url, 
-                json=payload, 
-                headers={"x-api-key": self.tool_config.stt_api_key},
-                timeout=30 # Good practice to add a timeout
-            )
-            
-            response.raise_for_status() # Raise error for bad status codes
-            return response.json().get("result", "No result found")
-            
+                    if status.status.lower() == "complete" or status.status.lower() == "failed":
+                        break;
+                    time.sleep(5)
+
+                job_response = stt_client.stt.get_job(job_id)
+
+                if hasattr(job_response, 'result') and hasattr(job_response.result, 'data'):
+                    all_segments = job_response.result.data
+                    
+                    clean_transcripts = [
+                        segment.transcript 
+                        for segment in all_segments 
+                        if segment.channel == 0
+                    ]
+                    
+                    full_transcript = " ".join(clean_transcripts)
+                    
+                    return full_transcript
+                else:
+                    return "No transcript data found in the result."
         except Exception as e:
             return f"Error processing audio: {str(e)}"
 

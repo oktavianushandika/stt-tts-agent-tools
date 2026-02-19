@@ -6,13 +6,17 @@ Authors:
     GDP Labs
 """
 
-from typing import Any, Optional, Type
+from typing import Any, Optional
 
+from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
+from gl_speech_sdk import SpeechClient
+from aip_agents.utils import LoggerManager
 
-import os
-import requests
+import time
+
+logger = LoggerManager.get_logger(__name__)
 
 class TTSConfig(BaseModel):
     """Config schema for the TTS tool."""
@@ -26,67 +30,68 @@ class TTSInput(BaseModel):
     """Input schema for the TTS tool."""
 
     text: str = Field(description="The text to convert to speech")
+    model: Optional[str] = Field(
+        default=None,
+        description="The TTS model to use. Options: 'tts-dimas-formal' (male voice) or 'tts-ocha-gentle' (female voice). If not specified, uses the default model from config."
+    )
+
 
 class TTSTool(BaseTool):
     """Tool for converting text to speech."""
 
     name: str = "tts-test"
-    description: str = "Converts text to speech."
-    args_schema: Type[BaseModel] = TTSInput
-    tool_config_schema: Type[BaseModel] = TTSConfig
-    tool_config: TTSConfig = Field(default_factory=TTSConfig)
+    description: str = """Converts text to speech. 
+    Supports both male voice (tts-dimas-formal) and female voice (tts-ocha-gentle).
+    You can specify the model parameter to choose the voice type."""
+    args_schema: type[BaseModel] = TTSInput
+    tool_config_schema: type[BaseModel] = TTSConfig
 
-    def __init__(self, config: Optional[TTSConfig] = None, **kwargs: Any):
-        super().__init__(**kwargs)
-        if config:
-            self.tool_config = config
-        else:
-            # Provide fallbacks to prevent NoneType errors during server-side validation
-            self.tool_config = TTSConfig(
-                tts_base_url=os.getenv("TTS_BASE_URL", ""),
-                tts_api_key=os.getenv("TTS_API_KEY", ""),
-                model=os.getenv("TTS_MODEL", "tts-dimas-formal"),
-                # Convert string env var to actual boolean
-                wait=str(os.getenv("TTS_WAIT", "True")).lower() == "true",
-            )
-
-    def _run(self, text: str, **kwargs: Any) -> str:
+    def _run(self, text: str, config: RunnableConfig = None, **kwargs: Any) -> str:
         """Convert text to speech.
 
         Args:
             text: The text to convert to speech.
+            model: Optional model to use. If not specified, uses config default.
+            config: Runtime configuration.
             **kwargs: Additional execution arguments.
 
         Returns:
-            Speech audio URL string.
+            S3 URL to the generated audio file.
         """
 
         try:
-            url = f"{self.tool_config.tts_base_url}?as_signed_url=true"
-            api_key = self.tool_config.tts_api_key
+            tool_config = self.get_tool_config(config)
+            if (tool_config.tts_base_url == "" or tool_config.tts_api_key == ""):
+                return "Error: TTS base URL or API key is not set"
+            
+            # Use the model parameter if provided, otherwise use config default
+            selected_model = kwargs.get("model") if kwargs.get("model") is not None else tool_config.model
+            
+            tts_client = SpeechClient(
+                api_key=tool_config.tts_api_key,
+                base_url=tool_config.tts_base_url
+            )
+            result = tts_client.tts.synthesize(
+                text=text,
+                model=selected_model,
+                wait=False,
+                audio_format="mp3"
+            )
 
-            payload = {
-                "config": {
-                    "model": self.tool_config.model,
-                    "wait": self.tool_config.wait,
-                    "pitch": 0,
-                    "tempo": 1,
-                    "audio_format": "opus",
-                    "sample_rate": 16000
-                },
-                "request": {
-                    "label": "tts-test-job",
-                    "text": text
-                }
-            }
+            job_id = result.job_id
 
-            response = requests.post(url, json=payload, headers={"x-api-key": api_key})
-            job = response.json()
+            while True:
+                status = tts_client.tts.get_job(job_id)
 
-            if job["status"] == "complete":
-                return job["result"]["path"]
-            else:
-                return f"Error processing audio: {job['error']}"
+                if status.status.lower() == "complete" or status.status.lower() == "failed":
+                    break
+
+                time.sleep(5)
+
+            job_response = tts_client.tts.get_job(job_id=job_id, as_signed_url=True)
+
+            return job_response.result.path
         except Exception as e:
+            logger.error(f"Error in TTS tool: {str(e)}")
             return f"Error processing audio: {str(e)}"
 
