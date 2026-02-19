@@ -5,8 +5,9 @@ Authors:
 """
 
 from glaip_sdk import Agent, Tool
-from tools.tts_sdk_async import TTSTool
+from tools.tts import TTSTool
 from dotenv import load_dotenv
+from tools.txt_file_reader import TextFileReaderTool
 import os
 load_dotenv(override=True)
 
@@ -24,10 +25,10 @@ You are a bilingual text-to-speech assistant (English and Bahasa Indonesia) that
 <INSTRUCTIONS>
 Identify the text to be converted and the user's voice preference from the prompt.
 1. If the input provided in google docs link, use google_docs_reader to read the content in the google docs as input.
-2. If the input provided as docx file attachment, use docx_reader_tool to read the content in the google docs as input.
-3. If the input provided as pdf file attachment, use docx_reader_tool to read the content in the google docs as input.
-4. If the input provided as txt file attachment, read the content of the file directly
-5. Otherwise, read the input text explicitly from the prompt
+2. If the input provided as txt extension file attachment, use text_file_reader_tool to read the content of the file directly.
+3. If the input provided as docx extension file attachment, use docx_reader_tool to read the content in the google docs as input.
+4. If the input provided as pdf extension file attachment, use pdf_reader_tool to read the content in the google docs as input.
+5. Otherwise, read the input text explicitly from the prompt.
 
 Voice Selection Logic:
 1. Male Voice: Use model="tts-dimas-formal" if the user uses terms like:
@@ -43,6 +44,7 @@ Execution: Call the tts-test tool with the identified parameters.
 Use <LANGUAGE_SELECTION_LOGIC> to determine the language of the output.
 Provide the output in the determined language as stated in <OUTPUT_FORMAT>.
 If there are any errors, please show the error messages.
+Don't ask for any confirmations.
 </INSTRUCTIONS>
 
 <LANGUAGE_SELECTION_LOGIC>
@@ -86,6 +88,7 @@ Action: Call tts-test with text="Satu dua tiga" and model="tts-dimas-formal" (de
 2. google_docs_reader: read content from google docs as the text input
 3. docx_reader_tool: read content from docx files as the text input
 4. pdf_reader_tool: read content from pdf files as the text input
+5. text_file_reader_tool: read content from txt files as the text input
 </AVAILABLE_TOOLS>
 
 <OUTPUT_FORMAT>
@@ -101,7 +104,7 @@ Details:
 </OUTPUT_FORMAT>
         """,
         description="A text to speech assistant",
-        tools=[TTSTool, Tool.from_native("google_docs_reader"), Tool.from_native("docx_reader_tool"), Tool.from_native("pdf_reader_tool")],
+        tools=[TTSTool, Tool.from_native("google_docs_reader"), Tool.from_native("docx_reader_tool"), Tool.from_native("pdf_reader_tool"), TextFileReaderTool],
         tool_configs={
             TTSTool: {
                 "tts_base_url": os.getenv("TTS_BASE_URL", ""),
@@ -113,7 +116,7 @@ Details:
 
     agent.deploy()
 
-    response = agent.run("Help me convert the text 'Halo test satu dua tiga empat.' to speech using male voice.")
+    response = agent.run("Help me convert the attached text file to speech using female voice.", files=["text/test.txt"])
     print(response)
 
 
