@@ -75,7 +75,7 @@ class STTTool(BaseTool):
 
                 job_response = stt_client.stt.get_job(job_id)
 
-                if hasattr(job_response, 'result') and hasattr(job_response.result, 'data'):
+                if job_response.status.lower() == "complete" and hasattr(job_response, 'result') and hasattr(job_response.result, 'data'):
                     all_segments = job_response.result.data
                     
                     clean_transcripts = [
@@ -87,6 +87,8 @@ class STTTool(BaseTool):
                     full_transcript = " ".join(clean_transcripts)
                     
                     return full_transcript
+                elif job_response.status.lower() == "failed":
+                    return f"Job error: {job_response.result.error}"
                 else:
                     return "No transcript data found in the result."
         except Exception as e:
